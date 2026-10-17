@@ -10,6 +10,19 @@ Il fonctionne **entièrement dans le navigateur, sans serveur ni connexion inter
 
 C'est tout. Le fichier est autonome : vous pouvez le copier sur une clé USB, le mettre sur un poste de bureau ou l'héberger sur n'importe quel site statique.
 
+## Installer GBAKI sur une tablette ou un téléphone
+
+GBAKI s'installe comme une application (icône sur l'écran d'accueil, plein écran, fonctionne sans internet) depuis :
+
+**https://dizzylehub.github.io/LeDeveloppement/**
+
+- **Android (Samsung, Huawei, Tecno…)** : ouvrez l'adresse dans **Chrome**, touchez « 📲 Installer l'application » (ou menu ⋮ → « Installer l'application »).
+- **iPad / iPhone** : ouvrez l'adresse dans **Safari**, touchez **Partager** → « Sur l'écran d'accueil » → « Ajouter ».
+
+Internet n'est nécessaire qu'une fois, pour l'installation. Les gestes tactiles sont pris en charge : toucher pour sélectionner, glisser au doigt, pincer à deux doigts pour zoomer, double-toucher un texte pour l'écrire (ou bouton « ✎ Écrire »).
+
+Pour publier une nouvelle version : `./scripts/deploy-pages.sh` (branche `gh-pages`). Les tablettes se mettent à jour automatiquement à l'ouverture suivante.
+
 ## Fonctionnalités
 
 - **Formats prêts à l'emploi** : Instagram (post, story), présentation 16:9, A4, A3, A5, couverture Facebook, miniature YouTube, carte de visite, logo, taille personnalisée. **Redimensionner** un design vers un autre format, en copie ou sur place.
