@@ -27,16 +27,31 @@
     const rows = el.rows && el.rows.length ? el.rows : [['']];
     const nr = rows.length, nc = ncols(rows);
     const rh = H / nr;
-    const fs = Math.max(4, Math.min(el.fontSize || 24, rh * 0.6));
-    const padX = fs * 0.6;
+    let fs = Math.max(4, Math.min(el.fontSize || 24, rh * 0.6));
     // Largeurs de colonnes proportionnelles au contenu le plus long.
-    const need = [];
-    for (let j = 0; j < nc; j++) {
-      const len = Math.max(3, ...rows.map((r) => String(r[j] == null ? '' : r[j]).length));
-      need.push(len * fs * CW + 2 * padX);
-    }
+    const lens = [];
+    for (let j = 0; j < nc; j++) lens.push(Math.max(3, ...rows.map((r) => String(r[j] == null ? '' : r[j]).length)));
+    const chars = lens.reduce((a, b) => a + b, 0);
+    // Réduit la police (jusqu'à 60 %) si le contenu déborde ; au-delà, le texte est tronqué.
+    const fitFs = W / (chars * CW + nc * 1.2);
+    if (fitFs < fs) fs = Math.max(4, Math.max(fs * 0.6, fitFs));
+    const padX = fs * 0.6;
+    const need = lens.map((len) => len * fs * CW + 2 * padX);
     const sum = need.reduce((a, b) => a + b, 0);
-    const cw = need.map((n) => (n / sum) * W);
+    let cw = need.map((n) => (n / sum) * W);
+    if (sum > W) {
+      // Trop large : les colonnes courtes gardent leur largeur, les longues se partagent le reste.
+      const fixed = new Array(nc).fill(false);
+      for (let changed = true; changed;) {
+        changed = false;
+        const rest = W - need.reduce((a, n, j) => a + (fixed[j] ? n : 0), 0);
+        const open = need.reduce((a, n, j) => a + (fixed[j] ? 0 : n), 0);
+        const share = rest / fixed.filter((f) => !f).length;
+        cw = need.map((n, j) => (fixed[j] ? n : (n / open) * rest));
+        need.forEach((n, j) => { if (!fixed[j] && n <= share) { fixed[j] = changed = true; } });
+        if (fixed.every(Boolean)) break;
+      }
+    }
     const xs = [0];
     cw.forEach((w, j) => xs.push(xs[j] + w));
     const bc = G.esc(el.borderColor || '#e5e7eb');

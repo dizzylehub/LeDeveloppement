@@ -12,16 +12,17 @@ C'est tout. Le fichier est autonome : vous pouvez le copier sur une clé USB, le
 
 ## Fonctionnalités
 
-- **Formats prêts à l'emploi** : Instagram (post, story), présentation 16:9, A4, A3, A5, couverture Facebook, miniature YouTube, carte de visite, logo, taille personnalisée.
-- **9 modèles originaux** : promo, citation, événement, présentation, carte de visite, affiche de concert, menu, miniature YouTube, invitation.
-- **Texte** : polices, taille, couleur, gras, italique, souligné, alignement, interligne, espacement. Double-clic pour modifier.
-- **Formes** : rectangle, rectangle arrondi, cercle, triangle, losange, pentagone, hexagone, étoile, flèche, ligne. Remplissage, contour, arrondi.
-- **Images** : import, glisser-déposer, coller depuis le presse-papiers (Ctrl+V), coins arrondis.
-- **Mise en page** : déplacement avec guides magnétiques, redimensionnement, rotation, sélection multiple (Maj + clic ou cadre de sélection), alignement, ordre des calques, verrouillage, masquage, opacité.
-- **Fonds** : couleurs unies et dégradés.
-- **Multi-pages** : ajouter, dupliquer, réordonner, supprimer.
-- **Annuler / rétablir** (Ctrl+Z / Ctrl+Y) et enregistrement automatique dans le navigateur.
-- **Export** : PNG, JPG, PDF (×1, ×2, ×3) et projet `.gbaki` pour reprendre le travail sur un autre ordinateur.
+- **Formats prêts à l'emploi** : Instagram (post, story), présentation 16:9, A4, A3, A5, couverture Facebook, miniature YouTube, carte de visite, logo, taille personnalisée. **Redimensionner** un design vers un autre format, en copie ou sur place.
+- **30 modèles originaux**, classés par catégorie (réseaux sociaux, présentations, documents, impression, événements, business), dont une présentation de 5 diapositives, un CV, une facture, un certificat, des logos…
+- **Texte** : polices de l'ordinateur, 20 polices web (si internet), **import de vos propres polices** (TTF/OTF/WOFF) ; gras, italique, souligné, majuscules, listes à puces / numérotées, justification, interligne, espacement.
+- **Effets de texte** : ombre, décalé, contour, creux, néon, surligné, **texte en arc**.
+- **Photos** : filtres (noir et blanc, vintage, vif…), réglages (luminosité, contraste, saturation, teinte, flou…), recadrage, miroir, **formes de découpe** (cercle, cœur, étoile…), bordure, ombre, **retrait du fond uni**, image en arrière-plan, **cadres photo** à remplir.
+- **Éléments** : 20 formes avec dégradé et ombre, lignes (tirets, pointillés, flèches), **331 icônes** avec recherche en français, **473 emojis**, **graphiques** (barres, colonnes, courbes, aires, camembert, anneau), **tableaux**, **QR codes**, **dessin à main levée** (stylo, marqueur, surligneur).
+- **Mise en page** : guides magnétiques, grille, groupes, sélection multiple et redimensionnement de groupe, alignement et répartition, position au pixel, calques (masquer, verrouiller, réordonner), copier / coller le style.
+- **Couleurs** : sélecteur avec couleurs du document, **kit de marque** (couleurs et polices réutilisables) et **harmonies** qui recolorent tout le design en un clic.
+- **Multi-pages**, titre de page, **mode présentation plein écran**.
+- **Annuler / rétablir** et enregistrement automatique dans le navigateur.
+- **Export** : PNG (fond transparent possible), JPG, PDF multipage (×1, ×2, ×3) et projet `.gbaki` modifiable.
 
 ## Raccourcis clavier
 
@@ -30,6 +31,11 @@ C'est tout. Le fichier est autonome : vous pouvez le copier sur une clé USB, le
 | Ctrl+Z / Ctrl+Y | Annuler / rétablir |
 | Ctrl+C / Ctrl+V / Ctrl+X | Copier / coller / couper |
 | Ctrl+D | Dupliquer |
+| Ctrl+G / Ctrl+Maj+G | Grouper / dissocier |
+| Ctrl+Alt+C / Ctrl+Alt+V | Copier / coller le style |
+| Ctrl+Alt+P | Présenter |
+| T, R, C, L, D | Texte, rectangle, cercle, ligne, dessin |
+| ? | Liste des raccourcis |
 | Ctrl+A | Tout sélectionner sur la page |
 | Suppr | Supprimer |
 | Flèches (Maj = ×10) | Déplacer finement |
@@ -51,3 +57,9 @@ Pour régénérer le fichier autonome :
 ```bash
 node scripts/build.mjs   # produit dist/gbaki.html
 ```
+
+Les modules (icônes, emojis, graphiques, tableaux, QR codes, modèles) se branchent via les points d'extension décrits dans [`docs/EXTENSIONS.md`](docs/EXTENSIONS.md).
+
+## Licences
+
+Code GBAKI : écrit spécifiquement pour ce projet, aucun code de Canva. Icônes : [Lucide](https://lucide.dev) (licence ISC, voir `LICENSES/lucide-ISC.txt`).
