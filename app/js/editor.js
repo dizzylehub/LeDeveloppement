@@ -269,8 +269,15 @@
     const r = S.frames[pi].frame.getBoundingClientRect();
     return { x: (e.clientX - r.left) / S.zoom, y: (e.clientY - r.top) / S.zoom };
   }
+  // Doigts posés sur l'écran : à deux doigts, on zoome au lieu de déplacer.
+  let touchCount = 0;
+  window.addEventListener('pointerdown', (e) => { if (e.pointerType === 'touch') touchCount++; }, true);
+  const touchUp = (e) => { if (e.pointerType === 'touch') touchCount = Math.max(0, touchCount - 1); };
+  window.addEventListener('pointerup', touchUp, true);
+  window.addEventListener('pointercancel', touchUp, true);
+
   function drag(move, up) {
-    const mm = (ev) => move(ev);
+    const mm = (ev) => { if (touchCount < 2) move(ev); };
     const uu = (ev) => {
       window.removeEventListener('pointermove', mm);
       window.removeEventListener('pointerup', uu);
@@ -283,7 +290,7 @@
   }
 
   function onPointerDown(e, pi) {
-    if (e.button !== 0) return;
+    if (e.button !== 0 || (e.pointerType === 'touch' && touchCount > 1)) return;
     closePop();
     const handle = e.target.closest('[data-handle]');
     const node = e.target.closest('.el');
@@ -1145,7 +1152,8 @@
     const effectsBtn = () => h('button', { class: 'tool wide' + (S.tab === 'effects' ? ' on' : ''), onmousedown: (e) => e.preventDefault(), onclick: () => openContext('effects') }, '✨ Effets');
     if (single && el.type === 'text') {
       const step = (d) => () => { applyLive((x) => (x.fontSize = Math.max(4, Math.round(x.fontSize + d)))); commit(); };
-      bar.append(fontSelect(el.fontFamily, (v) => { applyLive((x) => (x.fontFamily = v)); commit(); }),
+      bar.append(S.editing ? '' : h('button', { class: 'tool wide', title: 'Modifier le texte (double-clic ou Entrée)', onclick: () => startEditing(el.id) }, '✎ Écrire'),
+        fontSelect(el.fontFamily, (v) => { applyLive((x) => (x.fontFamily = v)); commit(); }),
         h('div', { class: 'stepper' }, h('button', { class: 'tool', title: 'Réduire', onmousedown: (e) => e.preventDefault(), onclick: step(-2) }, '−'),
           numInput(el.fontSize, 4, 800, 1, (v) => applyLive((x) => (x.fontSize = v))),
           h('button', { class: 'tool', title: 'Agrandir', onmousedown: (e) => e.preventDefault(), onclick: step(2) }, '+')),
@@ -1233,12 +1241,13 @@
       panel.append(...title('Modèles', 'Cliquez pour appliquer un modèle à la page sélectionnée.'));
       const cats = ['Tous', ...new Set(G.TEMPLATES.map((t) => t.category).filter(Boolean))];
       panel.append(h('div', { class: 'chips' }, cats.map((c) => h('button', { class: 'chip' + (S.tplCat === c ? ' on' : ''), onclick: () => { S.tplCat = c; buildPanel(); } }, c))));
+      const tw = Math.max(70, Math.min(116, Math.floor((panel.clientWidth - 32 - 10) / 2) - 12));
       const grid = h('div', { class: 'tpl-grid' });
       for (const t of G.TEMPLATES.filter((t) => S.tplCat === 'Tous' || t.category === S.tplCat)) {
         const tmp = { width: t.w, height: t.h, assets: {} };
         const n = t.pages ? t.pages.length : 1;
         grid.append(h('button', { class: 'tpl-card', title: t.name, onclick: () => applyTemplate(t) },
-          G.renderPreview(tmp, G.pageFromTemplate(t, t.w, t.h), 116, 116),
+          G.renderPreview(tmp, G.pageFromTemplate(t, t.w, t.h), tw, tw),
           h('span', {}, t.name + (n > 1 ? ` · ${n} p.` : ''))));
       }
       panel.append(grid);
@@ -1767,9 +1776,9 @@
         h('button', { class: 'icon-btn', 'data-act': 'undo', title: 'Annuler (Ctrl+Z)', onclick: undo }, '↶'),
         h('button', { class: 'icon-btn', 'data-act': 'redo', title: 'Rétablir (Ctrl+Y)', onclick: redo }, '↷'),
         h('span', { id: 'save-state', class: 'save-state' }, 'Enregistré'),
-        h('button', { class: 'tb-btn', onclick: openResize, title: 'Changer le format du design' }, '⤢ Redimensionner'),
+        h('button', { class: 'tb-btn opt', onclick: openResize, title: 'Changer le format du design' }, '⤢ Redimensionner'),
         h('button', { class: 'tb-btn', onclick: present, title: 'Présenter en plein écran (Ctrl+Alt+P)' }, '▶ Présenter'),
-        h('button', { class: 'tb-btn', onclick: saveFile, title: 'Télécharger le fichier projet (réouvrable sur un autre ordinateur)' }, 'Enregistrer .gbaki'),
+        h('button', { class: 'tb-btn opt', onclick: saveFile, title: 'Télécharger le fichier projet (réouvrable sur un autre ordinateur)' }, 'Enregistrer .gbaki'),
         h('button', { class: 'tb-btn primary', onclick: openExport }, 'Télécharger'),
         h('button', { class: 'icon-btn', onclick: openHelp, title: 'Raccourcis clavier (?)' }, '?')),
       h('div', { class: 'body' },
@@ -1827,6 +1836,17 @@
       e.preventDefault();
       setZoom(S.zoom * (e.deltaY < 0 ? 1.1 : 1 / 1.1));
     }, { passive: false });
+    // Pincer pour zoomer (tablette, téléphone).
+    let pinch = null;
+    const span = (t) => Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY);
+    scroller.addEventListener('touchstart', (e) => { if (e.touches.length === 2) { pinch = { d: span(e.touches), z: S.zoom }; S.marquee = null; S.guides = []; } }, { passive: true });
+    scroller.addEventListener('touchmove', (e) => {
+      if (!pinch || e.touches.length !== 2) return;
+      e.preventDefault();
+      const z = (pinch.z * span(e.touches)) / pinch.d;
+      if (Math.abs(z - S.zoom) / S.zoom > 0.04) setZoom(z);
+    }, { passive: false });
+    scroller.addEventListener('touchend', (e) => { if (e.touches.length < 2) pinch = null; });
     scroller.addEventListener('dragover', (e) => e.preventDefault());
     scroller.addEventListener('drop', (e) => {
       e.preventDefault();

@@ -34,6 +34,22 @@
     app.innerHTML = '';
     const persistent = await G.store.persistent();
     const designs = (await G.store.all()).sort((a, b) => b.updatedAt - a.updatedAt);
+    // Bouton « Installer l'application » (tablette, téléphone, ordinateur).
+    const installBtn = h('button', { class: 'btn primary install-btn hidden', onclick: async () => {
+      if (await G.pwa.install()) return;
+      const steps = G.pwa.ios()
+        ? ['Ouvrez cette page dans Safari.', 'Touchez le bouton Partager (carré avec une flèche vers le haut).', 'Choisissez « Sur l’écran d’accueil », puis « Ajouter ».']
+        : ['Ouvrez cette page dans Chrome (ou Edge, Samsung Internet).', 'Touchez le menu ⋮ en haut à droite.', 'Choisissez « Installer l’application » (ou « Ajouter à l’écran d’accueil »).'];
+      const m = h('div', { class: 'modal', onclick: (e) => { if (e.target === m || e.target.closest('.close')) m.remove(); } },
+        h('div', { class: 'modal-card' }, h('h3', {}, 'Installer GBAKI'),
+          G.pwa.hosted() ? '' : h('p', { class: 'muted small' }, 'L’installation se fait depuis l’adresse internet de GBAKI (https://…), pas depuis un fichier ouvert sur l’ordinateur.'),
+          h('ol', { class: 'steps' }, steps.map((t) => h('li', {}, t))),
+          h('p', { class: 'muted small' }, 'GBAKI apparaîtra alors avec son icône, comme les autres applications, et fonctionnera sans internet.'),
+          h('div', { class: 'modal-actions' }, h('button', { class: 'btn primary close' }, 'Compris'))));
+      document.body.append(m);
+    } }, '📲 Installer l’application');
+    if (!G.pwa.standalone() && (G.pwa.hosted() || G.pwa.canPrompt())) installBtn.classList.remove('hidden');
+    document.addEventListener('gbaki-installable', () => installBtn.classList.remove('hidden'), { once: true });
     const fileInput = h('input', { type: 'file', accept: '.gbaki,application/json', hidden: true, onchange: (e) => e.target.files[0] && openFile(e.target.files[0]) });
 
     const formatCard = (f) => {
@@ -103,6 +119,7 @@
       h('header', { class: 'home-top' },
         h('span', { class: 'brand' }, 'GBAKI'),
         h('div', { class: 'spacer' }),
+        installBtn,
         h('button', { class: 'btn', onclick: () => fileInput.click() }, 'Ouvrir un fichier .gbaki'),
         fileInput),
       h('section', { class: 'hero' },
