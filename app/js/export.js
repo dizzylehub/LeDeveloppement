@@ -28,11 +28,7 @@
 
   function paintBackground(ctx, bg, W, H) {
     if (bg && bg.type === 'gradient') {
-      const a = ((bg.angle || 0) * Math.PI) / 180;
-      const dx = Math.sin(a), dy = -Math.cos(a);
-      const len = Math.abs(W * dx) + Math.abs(H * dy);
-      const cx = W / 2, cy = H / 2;
-      const g = ctx.createLinearGradient(cx - (dx * len) / 2, cy - (dy * len) / 2, cx + (dx * len) / 2, cy + (dy * len) / 2);
+      const g = ctx.createLinearGradient(...G.gradientLine(W, H, bg.angle));
       g.addColorStop(0, bg.color);
       g.addColorStop(1, bg.color2);
       ctx.fillStyle = g;
@@ -42,96 +38,213 @@
     ctx.fillRect(0, 0, W, H);
   }
 
-  /* Découpe le texte en lignes comme le fait le navigateur (pre-wrap + coupure des mots trop longs). */
+  // Les ombres du canvas ne suivent pas la transformation : on les multiplie par l'échelle d'export.
+  let SCALE = 1;
+  function setShadow(ctx, sh) {
+    if (!sh) return;
+    ctx.shadowColor = sh.color || 'rgba(0,0,0,.4)';
+    ctx.shadowBlur = (sh.blur || 0) * SCALE;
+    ctx.shadowOffsetX = (sh.x || 0) * SCALE;
+    ctx.shadowOffsetY = (sh.y || 0) * SCALE;
+  }
+  function clearShadow(ctx) { ctx.shadowColor = 'transparent'; ctx.shadowBlur = 0; ctx.shadowOffsetX = 0; ctx.shadowOffsetY = 0; }
+
+  /* Dessine un SVG autonome dans la boîte 0,0,w,h (avec une marge pour ce qui dépasse). */
+  async function drawSvg(ctx, svg, w, h) {
+    const p = Math.min(200, Math.max(w, h) * 0.15);
+    const k = SCALE * 2;
+    const wrapped = `<svg xmlns="http://www.w3.org/2000/svg" width="${(w + 2 * p) * k}" height="${(h + 2 * p) * k}" viewBox="${-p} ${-p} ${w + 2 * p} ${h + 2 * p}">${svg.replace('<svg ', `<svg x="0" y="0" `)}</svg>`;
+    const img = await loadImage('data:image/svg+xml;charset=utf-8,' + encodeURIComponent(wrapped));
+    if (img) ctx.drawImage(img, -p, -p, w + 2 * p, h + 2 * p);
+  }
+
+  /* Découpe le texte en lignes comme le navigateur (pre-wrap + coupure des mots trop longs). */
   function wrapText(ctx, text, maxW) {
     const lines = [];
     for (const para of String(text).split('\n')) {
       const fits = (s) => ctx.measureText(s).width <= maxW;
       let line = '';
+      const start = lines.length;
       for (const token of para.split(/(\s+)/)) {
         if (!token) continue;
         if (fits(line + token)) { line += token; continue; }
-        if (!token.trim()) { lines.push(line); line = ''; continue; }
-        if (line.trim()) { lines.push(line.replace(/\s+$/, '')); line = ''; }
+        if (!token.trim()) { lines.push({ t: line }); line = ''; continue; }
+        if (line.trim()) { lines.push({ t: line.replace(/\s+$/, '') }); line = ''; }
         if (fits(token)) { line = token; continue; }
         for (const ch of token) {
-          if (!fits(line + ch) && line) { lines.push(line); line = ''; }
+          if (!fits(line + ch) && line) { lines.push({ t: line }); line = ''; }
           line += ch;
         }
       }
-      lines.push(line.replace(/\s+$/, ''));
+      lines.push({ t: line.replace(/\s+$/, ''), last: true });
+      if (lines.length === start) lines.push({ t: '', last: true });
     }
     return lines;
   }
 
-  function drawText(ctx, el) {
+  async function drawText(ctx, el) {
+    if (el.curve) {
+      const c = G.curveSvg(el);
+      await drawSvg(ctx, c.svg, c.w, c.h);
+      return;
+    }
+    if (document.fonts && document.fonts.load) { try { await document.fonts.load(G.fontCss(el)); } catch (e) { /* police système */ } }
+    const pad = G.textPad(el);
+    if (el.bgColor) {
+      ctx.fillStyle = el.bgColor;
+      roundRectPath(ctx, 0, 0, el.w, el.h, el.bgRadius || 0);
+      ctx.fill();
+    }
     ctx.font = G.fontCss(el);
     if ('letterSpacing' in ctx) ctx.letterSpacing = (el.letterSpacing || 0) + 'px';
-    ctx.fillStyle = el.color;
     ctx.textBaseline = 'middle';
-    ctx.textAlign = el.align === 'justify' ? 'left' : el.align;
+    const innerW = el.w - 2 * pad;
     const lh = el.fontSize * el.lineHeight;
-    const x = el.align === 'center' ? el.w / 2 : el.align === 'right' ? el.w : 0;
-    wrapText(ctx, el.text, el.w).forEach((line, i) => {
-      const y = i * lh + lh / 2;
-      ctx.fillText(line, x, y);
-      if (el.underline && line) {
-        const lw = ctx.measureText(line).width;
-        const lx = el.align === 'center' ? x - lw / 2 : el.align === 'right' ? x - lw : x;
-        ctx.fillRect(lx, y + el.fontSize * 0.42, lw, Math.max(1, el.fontSize / 14));
+    const lines = wrapText(ctx, G.displayText(el), innerW);
+    const outline = el.outline && el.outline.width ? el.outline : null;
+    const paint = (str, x, y) => {
+      if (outline) {
+        ctx.save();
+        setShadow(ctx, el.shadow);
+        ctx.strokeStyle = outline.color;
+        ctx.lineWidth = outline.width;
+        ctx.lineJoin = 'round';
+        ctx.strokeText(str, x, y);
+        ctx.restore();
+        ctx.fillText(str, x, y);
+      } else {
+        ctx.save();
+        setShadow(ctx, el.shadow);
+        ctx.fillText(str, x, y);
+        ctx.restore();
+      }
+    };
+    ctx.fillStyle = el.color;
+    lines.forEach((ln, i) => {
+      const y = pad + i * lh + lh / 2;
+      const str = ln.t;
+      if (el.align === 'justify' && !ln.last && /\s/.test(str.trim())) {
+        ctx.textAlign = 'left';
+        const words = str.trim().split(/\s+/);
+        const total = words.reduce((a, w) => a + ctx.measureText(w).width, 0);
+        const gap = (innerW - total) / (words.length - 1);
+        let x = pad;
+        for (const w of words) { paint(w, x, y); x += ctx.measureText(w).width + gap; }
+      } else {
+        const align = el.align === 'justify' ? 'left' : el.align;
+        ctx.textAlign = align;
+        const x = align === 'center' ? el.w / 2 : align === 'right' ? el.w - pad : pad;
+        paint(str, x, y);
+        if (el.underline && str) {
+          const lw = ctx.measureText(str).width;
+          const lx = align === 'center' ? x - lw / 2 : align === 'right' ? x - lw : x;
+          ctx.fillRect(lx, y + el.fontSize * 0.42, lw, Math.max(1, el.fontSize / 14));
+        }
       }
     });
   }
 
+  function shapeFill(ctx, el) {
+    if (!el.fill2 || el.fill === 'transparent') return el.fill;
+    const g = ctx.createLinearGradient(...G.gradientLine(el.w, el.h, el.fillAngle || 135));
+    g.addColorStop(0, el.fill);
+    g.addColorStop(1, el.fill2);
+    return g;
+  }
+
+  function polyPath(ctx, pts, w, h) {
+    ctx.beginPath();
+    pts.forEach(([px, py], i) => (i ? ctx.lineTo(px * w, py * h) : ctx.moveTo(px * w, py * h)));
+    ctx.closePath();
+  }
+
   function drawShape(ctx, el) {
     const { w, h } = el;
-    ctx.fillStyle = el.fill;
-    ctx.strokeStyle = el.stroke;
-    ctx.lineWidth = el.strokeWidth || 0;
+    setShadow(ctx, el.shadow);
     ctx.lineJoin = 'round';
     if (el.shape === 'line') {
+      const g = G.lineGeom(el);
+      ctx.strokeStyle = ctx.fillStyle = el.stroke;
       ctx.lineCap = 'round';
-      ctx.lineWidth = Math.max(1, el.strokeWidth);
+      ctx.lineWidth = g.sw;
+      if (g.dash) ctx.setLineDash(g.dash);
       ctx.beginPath();
-      ctx.moveTo(0, h / 2);
-      ctx.lineTo(w, h / 2);
+      ctx.moveTo(g.x1, g.y);
+      ctx.lineTo(g.x2, g.y);
       ctx.stroke();
+      ctx.setLineDash([]);
+      for (const hd of g.heads) {
+        if (hd.poly) { polyPath(ctx, hd.poly, 1, 1); ctx.lineWidth = g.sw / 2; ctx.fill(); ctx.stroke(); }
+        else { ctx.beginPath(); ctx.arc(hd.circle[0], hd.circle[1], hd.circle[2], 0, Math.PI * 2); ctx.fill(); }
+      }
       return;
     }
+    ctx.fillStyle = shapeFill(ctx, el);
+    ctx.strokeStyle = el.stroke;
+    ctx.lineWidth = el.strokeWidth || 0;
     if (el.shape === 'rect' || el.shape === 'roundrect') roundRectPath(ctx, 0, 0, w, h, el.radius || 0);
     else if (el.shape === 'ellipse') { ctx.beginPath(); ctx.ellipse(w / 2, h / 2, w / 2, h / 2, 0, 0, Math.PI * 2); }
-    else {
-      ctx.beginPath();
-      G.shapePoints(el.shape).forEach(([px, py], i) => (i ? ctx.lineTo(px * w, py * h) : ctx.moveTo(px * w, py * h)));
-      ctx.closePath();
-    }
+    else polyPath(ctx, G.shapePoints(el.shape), w, h);
     ctx.fill();
-    if (el.strokeWidth > 0) ctx.stroke();
+    if (el.strokeWidth > 0) { clearShadow(ctx); ctx.stroke(); }
+  }
+
+  function maskPath(ctx, el) {
+    const pts = G.maskPoints(el.mask);
+    if (pts) polyPath(ctx, pts, el.w, el.h);
+    else roundRectPath(ctx, 0, 0, el.w, el.h, el.mask === 'roundrect' ? Math.min(el.w, el.h) * 0.12 : el.radius || 0);
   }
 
   async function drawImage(ctx, el, design) {
     const asset = design.assets[el.assetId];
     const img = asset && (await loadImage(asset.src));
     if (!img) return;
-    // Équivalent de object-fit: cover.
-    const r = Math.max(el.w / img.naturalWidth, el.h / img.naturalHeight);
-    const sw = el.w / r, sh = el.h / r;
-    const sx = (img.naturalWidth - sw) / 2, sy = (img.naturalHeight - sh) / 2;
+    const r = G.coverRect(el, img.naturalWidth, img.naturalHeight);
     ctx.save();
-    roundRectPath(ctx, 0, 0, el.w, el.h, el.radius || 0);
+    if (el.flipX || el.flipY) {
+      ctx.translate(el.flipX ? el.w : 0, el.flipY ? el.h : 0);
+      ctx.scale(el.flipX ? -1 : 1, el.flipY ? -1 : 1);
+    }
+    if (el.shadow) {
+      ctx.save();
+      setShadow(ctx, el.shadow);
+      maskPath(ctx, el);
+      ctx.fillStyle = '#000';
+      ctx.fill();
+      ctx.restore();
+    }
+    maskPath(ctx, el);
     ctx.clip();
-    ctx.drawImage(img, sx, sy, sw, sh, 0, 0, el.w, el.h);
+    const f = G.filterCss(el.filters, SCALE);
+    if (f && 'filter' in ctx) ctx.filter = f;
+    ctx.drawImage(img, r.sx, r.sy, r.sw, r.sh, 0, 0, el.w, el.h);
     ctx.restore();
+    if (el.border && el.border.width > 0) {
+      ctx.save();
+      if (el.flipX || el.flipY) {
+        ctx.translate(el.flipX ? el.w : 0, el.flipY ? el.h : 0);
+        ctx.scale(el.flipX ? -1 : 1, el.flipY ? -1 : 1);
+      }
+      if (el.mask === 'ellipse') { ctx.beginPath(); ctx.ellipse(el.w / 2, el.h / 2, el.w / 2, el.h / 2, 0, 0, Math.PI * 2); }
+      else maskPath(ctx, el);
+      ctx.strokeStyle = el.border.color;
+      ctx.lineWidth = el.border.width;
+      ctx.lineJoin = 'round';
+      ctx.stroke();
+      ctx.restore();
+    }
   }
 
-  G.renderPageToCanvas = async (design, page, scale) => {
+  G.renderPageToCanvas = async (design, page, scale, opts = {}) => {
     const W = design.width, H = design.height;
     const canvas = document.createElement('canvas');
     canvas.width = Math.round(W * scale);
     canvas.height = Math.round(H * scale);
     const ctx = canvas.getContext('2d');
+    SCALE = scale;
+    if (document.fonts && document.fonts.ready) await document.fonts.ready;
     ctx.scale(scale, scale);
-    paintBackground(ctx, page.background, W, H);
+    if (!opts.transparent) paintBackground(ctx, page.background, W, H);
     for (const el of page.elements) {
       if (el.hidden) continue;
       ctx.save();
@@ -139,11 +252,16 @@
       ctx.translate(el.x + el.w / 2, el.y + el.h / 2);
       ctx.rotate(((el.rotation || 0) * Math.PI) / 180);
       ctx.translate(-el.w / 2, -el.h / 2);
-      if (el.type === 'text') drawText(ctx, el);
+      if (el.type === 'text') await drawText(ctx, el);
       else if (el.type === 'shape') drawShape(ctx, el);
       else if (el.type === 'image') await drawImage(ctx, el, design);
+      else if (G.TYPES[el.type]) {
+        setShadow(ctx, el.shadow);
+        await drawSvg(ctx, G.TYPES[el.type].svg(el, design), el.w, el.h);
+      }
       ctx.restore();
     }
+    SCALE = 1;
     return canvas;
   };
 
@@ -202,10 +320,10 @@
   }
 
   /* format : 'png' | 'jpg' | 'pdf' ; pages : indices à exporter. */
-  G.exportDesign = async (design, format, scale, pages) => {
+  G.exportDesign = async (design, format, scale, pages, opts = {}) => {
     const list = pages.map((i) => design.pages[i]);
     const canvases = [];
-    for (const p of list) canvases.push(await G.renderPageToCanvas(design, p, scale));
+    for (const p of list) canvases.push(await G.renderPageToCanvas(design, p, scale, { transparent: opts.transparent && format === 'png' }));
     const name = safeName(design.name);
     if (format === 'pdf') {
       download(await buildPdf(design, canvases), name + '.pdf');

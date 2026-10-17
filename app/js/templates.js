@@ -111,23 +111,18 @@
     },
   ];
 
-  /* Construit une page à partir d'un modèle, mise à l'échelle et centrée dans W × H. */
-  G.pageFromTemplate = (tpl, W, H) => {
+  /* Construit les pages d'un modèle, mises à l'échelle et centrées dans W × H. */
+  G.pagesFromTemplate = (tpl, W, H) => {
     const s = Math.min(W / tpl.w, H / tpl.h);
     const ox = (W - tpl.w * s) / 2;
     const oy = (H - tpl.h * s) / 2;
-    const page = G.newPage(G.clone(tpl.bg));
-    page.elements = tpl.elements().map((el) => {
-      el.x = el.x * s + ox;
-      el.y = el.y * s + oy;
-      el.w *= s;
-      el.h *= s;
-      if (el.fontSize) el.fontSize = Math.max(6, Math.round(el.fontSize * s));
-      if (el.letterSpacing) el.letterSpacing *= s;
-      if (el.strokeWidth) el.strokeWidth *= s;
-      if (el.radius) el.radius *= s;
-      return el;
+    const makers = tpl.pages || [tpl.elements];
+    const bgs = tpl.bgs || [tpl.bg];
+    return makers.map((make, i) => {
+      const page = G.newPage(G.clone(bgs[i] || bgs[0]));
+      page.elements = G.scaleElements(make(), s, ox, oy);
+      return page;
     });
-    return page;
   };
+  G.pageFromTemplate = (tpl, W, H) => G.pagesFromTemplate(tpl, W, H)[0];
 })();

@@ -65,11 +65,17 @@
   G.makeImage = (assetId, o) => Object.assign(base(), { type: 'image', assetId, radius: 0 }, o);
 
   /* Formes : points normalisés (0..1) partagés par le rendu SVG et l'export canvas. */
-  G.SHAPES = ['rect', 'roundrect', 'ellipse', 'triangle', 'diamond', 'pentagon', 'hexagon', 'star', 'arrow', 'line'];
+  G.SHAPES = ['rect', 'roundrect', 'ellipse', 'triangle', 'righttriangle', 'diamond', 'pentagon', 'hexagon', 'octagon',
+    'star', 'star6', 'burst', 'heart', 'cross', 'parallelogram', 'trapezoid', 'chevron', 'arrow', 'doublearrow', 'bubble', 'line'];
   G.shapePoints = (shape) => {
     const poly = (n, rot) => Array.from({ length: n }, (_, i) => {
       const a = rot + (i * 2 * Math.PI) / n;
       return [0.5 + 0.5 * Math.cos(a), 0.5 + 0.5 * Math.sin(a)];
+    });
+    const starPts = (n, inner) => Array.from({ length: n * 2 }, (_, i) => {
+      const a = -Math.PI / 2 + (i * Math.PI) / n;
+      const r = i % 2 ? inner : 0.5;
+      return [0.5 + r * Math.cos(a), 0.5 + r * Math.sin(a)];
     });
     switch (shape) {
       case 'triangle': return [[0.5, 0], [1, 1], [0, 1]];
@@ -81,6 +87,32 @@
         const a = -Math.PI / 2 + (i * Math.PI) / 5;
         const r = i % 2 ? 0.2 : 0.5;
         return [0.5 + r * Math.cos(a), 0.52 + r * Math.sin(a)];
+      });
+      case 'star6': return starPts(6, 0.28);
+      case 'burst': return starPts(16, 0.4);
+      case 'righttriangle': return [[0, 0], [1, 1], [0, 1]];
+      case 'octagon': return poly(8, Math.PI / 8);
+      case 'cross': return [[0.33, 0], [0.67, 0], [0.67, 0.33], [1, 0.33], [1, 0.67], [0.67, 0.67], [0.67, 1], [0.33, 1], [0.33, 0.67], [0, 0.67], [0, 0.33], [0.33, 0.33]];
+      case 'parallelogram': return [[0.25, 0], [1, 0], [0.75, 1], [0, 1]];
+      case 'trapezoid': return [[0.2, 0], [0.8, 0], [1, 1], [0, 1]];
+      case 'chevron': return [[0, 0], [0.65, 0], [1, 0.5], [0.65, 1], [0, 1], [0.35, 0.5]];
+      case 'doublearrow': return [[0, 0.5], [0.25, 0], [0.25, 0.3], [0.75, 0.3], [0.75, 0], [1, 0.5], [0.75, 1], [0.75, 0.7], [0.25, 0.7], [0.25, 1]];
+      case 'bubble': {
+        // Bulle de dialogue : rectangle arrondi + pointe.
+        const pts = [];
+        const arc = (cx, cy, r, a0, a1) => { for (let i = 0; i <= 6; i++) { const a = a0 + ((a1 - a0) * i) / 6; pts.push([cx + r * Math.cos(a), cy + (r / 0.78) * 0.78 * Math.sin(a)]); } };
+        arc(0.12, 0.12, 0.12, Math.PI, 1.5 * Math.PI);
+        arc(0.88, 0.12, 0.12, 1.5 * Math.PI, 2 * Math.PI);
+        arc(0.88, 0.66, 0.12, 0, 0.5 * Math.PI);
+        pts.push([0.42, 0.78], [0.22, 1], [0.26, 0.78]);
+        arc(0.12, 0.66, 0.12, 0.5 * Math.PI, Math.PI);
+        return pts;
+      }
+      case 'heart': return Array.from({ length: 60 }, (_, i) => {
+        const t = (i / 60) * 2 * Math.PI;
+        const x = 16 * Math.sin(t) ** 3;
+        const y = 13 * Math.cos(t) - 5 * Math.cos(2 * t) - 2 * Math.cos(3 * t) - Math.cos(4 * t);
+        return [0.5 + x / 34, 0.42 - y / 30];
       });
       default: return null;
     }

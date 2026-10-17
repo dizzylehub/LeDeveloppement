@@ -3,9 +3,9 @@
   const G = window.GBAKI;
   const h = G.h;
 
-  async function create(name, w, h_, page) {
+  async function create(name, w, h_, pages) {
     const d = G.newDesign(name, w, h_);
-    if (page) d.pages = [page];
+    if (pages) d.pages = pages;
     try { d.thumb = await G.makeThumb(d); } catch (e) { /* facultatif */ }
     await G.store.put(d);
     location.hash = '#/d/' + d.id;
@@ -53,10 +53,22 @@
         create('Design sans titre', w, hh);
       } }, 'Créer'));
 
-    const tplGrid = h('div', { class: 'home-tpl-grid' }, G.TEMPLATES.map((t) =>
-      h('button', { class: 'home-tpl', onclick: () => create(t.name, t.w, t.h, G.pageFromTemplate(t, t.w, t.h)) },
-        G.renderPreview({ width: t.w, height: t.h, assets: {} }, G.pageFromTemplate(t, t.w, t.h), 200, 200),
-        h('span', {}, t.name))));
+    let cat = 'Tous';
+    const cats = ['Tous', ...new Set(G.TEMPLATES.map((t) => t.category).filter(Boolean))];
+    const tplGrid = h('div', { class: 'home-tpl-grid' });
+    const catBar = h('div', { class: 'home-cats' });
+    const renderTpls = () => {
+      catBar.innerHTML = '';
+      catBar.append(...cats.map((c) => h('button', { class: 'chip' + (c === cat ? ' on' : ''), onclick: () => { cat = c; renderTpls(); } }, c)));
+      tplGrid.innerHTML = '';
+      for (const t of G.TEMPLATES.filter((x) => cat === 'Tous' || x.category === cat)) {
+        const n = t.pages ? t.pages.length : 1;
+        tplGrid.append(h('button', { class: 'home-tpl', onclick: () => create(t.name, t.w, t.h, G.pagesFromTemplate(t, t.w, t.h)) },
+          G.renderPreview({ width: t.w, height: t.h, assets: {} }, G.pageFromTemplate(t, t.w, t.h), 200, 200),
+          h('span', {}, t.name + (n > 1 ? ` · ${n} pages` : ''))));
+      }
+    };
+    renderTpls();
 
     const search = h('input', { class: 'search', type: 'search', placeholder: 'Rechercher dans mes designs…' });
     const list = h('div', { class: 'design-grid' });
@@ -97,7 +109,7 @@
         h('h1', {}, 'Que voulez-vous créer aujourd’hui ?'),
         h('p', {}, 'Affiches, publications, présentations, cartes… GBAKI fonctionne entièrement dans votre navigateur, même sans connexion internet.')),
       h('section', { class: 'home-section' }, h('h2', {}, 'Créer un design'), h('div', { class: 'format-grid' }, G.FORMATS.map(formatCard), custom)),
-      h('section', { class: 'home-section' }, h('h2', {}, 'Partir d’un modèle'), tplGrid),
+      h('section', { class: 'home-section' }, h('h2', {}, `Partir d’un modèle (${G.TEMPLATES.length})`), catBar, tplGrid),
       h('section', { class: 'home-section' },
         h('div', { class: 'section-head' }, h('h2', {}, 'Mes designs'), search),
         list,
