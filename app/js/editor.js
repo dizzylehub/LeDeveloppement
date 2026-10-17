@@ -856,6 +856,75 @@
     return 'placeholder';
   }
 
+  /* Détourage hors ligne : retire un fond uni par remplissage depuis les bords (tolérance réglable). */
+  async function removeBackground(el, tol) {
+    const a = S.design.assets[el.assetId];
+    if (!a) return;
+    const img = await loadImg(a.src);
+    const w = img.naturalWidth, hh = img.naturalHeight;
+    const c = document.createElement('canvas');
+    c.width = w; c.height = hh;
+    const x = c.getContext('2d');
+    x.drawImage(img, 0, 0);
+    const im = x.getImageData(0, 0, w, hh);
+    const d = im.data;
+    const px = (i) => [d[i * 4], d[i * 4 + 1], d[i * 4 + 2]];
+    const corners = [0, w - 1, (hh - 1) * w, hh * w - 1].map(px);
+    const ref = [0, 1, 2].map((j) => corners.reduce((s2, cc) => s2 + cc[j], 0) / 4);
+    const dist = (i) => Math.hypot(d[i * 4] - ref[0], d[i * 4 + 1] - ref[1], d[i * 4 + 2] - ref[2]);
+    const seen = new Uint8Array(w * hh);
+    const queue = new Int32Array(w * hh);
+    let qh = 0, qt = 0;
+    const push = (i) => { if (!seen[i] && d[i * 4 + 3] > 0 && dist(i) <= tol * 1.6) { seen[i] = 1; queue[qt++] = i; } };
+    for (let i = 0; i < w; i++) { push(i); push((hh - 1) * w + i); }
+    for (let j = 0; j < hh; j++) { push(j * w); push(j * w + w - 1); }
+    while (qh < qt) {
+      const i = queue[qh++];
+      const dd = dist(i);
+      // Bord adouci : opacité progressive entre tol et 1,6 × tol.
+      d[i * 4 + 3] = dd <= tol ? 0 : Math.round(d[i * 4 + 3] * Math.min(1, (dd - tol) / (tol * 0.6)));
+      if (dd > tol) continue;
+      const cx = i % w;
+      if (cx > 0) push(i - 1);
+      if (cx < w - 1) push(i + 1);
+      if (i >= w) push(i - w);
+      if (i < w * (hh - 1)) push(i + w);
+    }
+    x.putImageData(im, 0, 0);
+    const id = G.uid();
+    S.design.assets[id] = { src: c.toDataURL('image/png'), name: (a.name || 'image') + ' (détourée)', w, h: hh };
+    el.originalAssetId = el.originalAssetId || el.assetId;
+    el.assetId = id;
+    commit();
+  }
+
+  /* Harmonies : recolore tout le design en associant les couleurs par luminosité. */
+  const THEMES = [
+    ['Coucher de soleil', ['#1e1b4b', '#7c3aed', '#f97316', '#fbbf24', '#fff7ed']],
+    ['Océan', ['#082f49', '#0369a1', '#06b6d4', '#a5f3fc', '#f0f9ff']],
+    ['Forêt', ['#052e16', '#166534', '#65a30d', '#d9f99d', '#f7fee7']],
+    ['Terre d’Afrique', ['#3b1d0f', '#9a3412', '#d97706', '#fcd34d', '#fefce8']],
+    ['Kente', ['#111827', '#15803d', '#dc2626', '#facc15', '#fffbeb']],
+    ['Pastel', ['#4c1d95', '#f472b6', '#a5b4fc', '#bbf7d0', '#fdf2f8']],
+    ['Minimal', ['#0a0a0a', '#404040', '#a3a3a3', '#e5e5e5', '#ffffff']],
+    ['Royal', ['#172554', '#1d4ed8', '#c2410c', '#fcd34d', '#fefce8']],
+  ];
+  const lum = (hex) => { const n = parseInt(hex.slice(1), 16); return 0.299 * (n >> 16) + 0.587 * ((n >> 8) & 255) + 0.114 * (n & 255); };
+  function recolor(pal) {
+    const used = docColors().sort((a, b) => lum(a) - lum(b));
+    if (!used.length) return;
+    const p = [...pal].sort((a, b) => lum(a) - lum(b));
+    const map = {};
+    used.forEach((c, i) => { map[c] = p[used.length === 1 ? p.length - 1 : Math.round((i * (p.length - 1)) / (used.length - 1))]; });
+    const sw = (v) => (typeof v === 'string' && map[v.toLowerCase()]) || v;
+    for (const pg of S.design.pages) {
+      pg.background.color = sw(pg.background.color);
+      if (pg.background.color2) pg.background.color2 = sw(pg.background.color2);
+      for (const e of pg.elements) for (const key of ['color', 'fill', 'fill2', 'stroke', 'bgColor']) if (e[key]) e[key] = sw(e[key]);
+    }
+    commit();
+  }
+
   /* ---------- polices ---------- */
   function loadWebFonts() {
     for (const f of G.WEB_FONTS) {
@@ -1314,7 +1383,14 @@
       for (const [a, b] of GRADIENTS) {
         g2.append(h('button', { class: 'sw', style: `background:linear-gradient(135deg, ${a}, ${b})`, onclick: () => { page().background = { type: 'gradient', color: a, color2: b, angle: 135 }; commit(); } }));
       }
-      panel.append(g2,
+      panel.append(g2, h('h4', {}, 'Harmonies de couleurs'), h('p', { class: 'muted small' }, 'Recolore tout le design en un clic (annulable avec Ctrl+Z).'));
+      const th = h('div', { class: 'themes' });
+      for (const [name, pal] of THEMES) {
+        th.append(h('button', { class: 'theme', title: name, onclick: () => recolor(pal) },
+          h('div', { class: 'theme-bar' }, pal.map((c) => h('span', { style: `background:${c}` }))), h('span', {}, name)));
+      }
+      panel.append(th);
+      panel.append(
         h('p', { class: 'muted small' }, 'Astuce : pour une photo en fond, sélectionnez une image puis « Modifier la photo » → « Définir comme arrière-plan ».'),
         h('button', { class: 'btn block', onclick: () => { S.design.pages.forEach((p) => (p.background = G.clone(page().background))); commit(); } }, 'Appliquer à toutes les pages'));
     },
@@ -1479,6 +1555,13 @@
           const a = S.design.assets[el.assetId];
           if (a) set((x) => { x.h = (x.w * a.h) / a.w; x.crop = { zoom: 1, x: 0.5, y: 0.5 }; });
         } }, 'Proportions d’origine'),
+        h('h4', {}, 'Retirer le fond'),
+        h('p', { class: 'muted small' }, 'Efface un fond uni (blanc, couleur unie) en partant des bords de l’image. Augmentez la tolérance si des restes subsistent.'),
+        field('Tolérance', (() => { const r = h('input', { type: 'range', min: 5, max: 120, value: S.bgTol || 40, oninput: (e) => (S.bgTol = +e.target.value) }); return r; })()),
+        h('div', { class: 'row' },
+          h('button', { class: 'btn primary', onclick: async (e) => { e.target.disabled = true; e.target.textContent = 'Traitement…'; await removeBackground(el, S.bgTol || 40); } }, '✂ Retirer le fond'),
+          el.originalAssetId ? h('button', { class: 'btn', onclick: () => set((x) => { x.assetId = x.originalAssetId; delete x.originalAssetId; }) }, 'Restaurer l’original') : ''),
+        h('h4', {}, 'Autres actions'),
         h('button', { class: 'btn block', onclick: setAsBackground }, 'Définir comme arrière-plan'),
         h('button', { class: 'btn block', onclick: () => set((x) => { x.filters = null; x.crop = null; x.flipX = x.flipY = false; }) }, 'Réinitialiser'));
       return;
