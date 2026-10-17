@@ -44,6 +44,13 @@
   });
 
   const base = () => ({ id: G.uid(), x: 0, y: 0, w: 200, h: 200, rotation: 0, opacity: 1, locked: false, hidden: false });
+  G.base = base;
+  G.esc = (str) => String(str).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+
+  /* Points d'extension (voir docs/EXTENSIONS.md). */
+  G.TYPES = {};
+  G.PANELS = [];
+  G.ELEMENT_SECTIONS = [];
 
   G.makeText = (o) => Object.assign(base(), {
     type: 'text', w: 500, h: 60, text: 'Votre texte', fontFamily: 'Arial', fontSize: 40,
