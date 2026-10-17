@@ -103,16 +103,25 @@
     const vals = data.map((d) => d.value);
     const horiz = el.kind === 'bar';
     const lo0 = Math.min(0, ...vals), hi0 = Math.max(0, ...vals);
-    const plotLen = horiz ? W * 0.6 : H - top - pad;
-    const ticks = niceTicks(lo0, hi0, Math.max(2, Math.min(8, Math.floor(plotLen / (fs * (horiz ? 5 : 2.6))))));
-    const lo = ticks[0], hi = ticks[ticks.length - 1];
     const tfs = fs * 0.85;
+    // Barres horizontales : zone des libellés à gauche, des valeurs à droite.
+    const hLabW = horiz ? Math.min(W * 0.32, Math.max(...data.map((d) => textW(d.label, fs))) + fs * 0.6) : 0;
+    const hx0 = pad + hLabW;
+    const hx1 = W - pad - (el.showValues ? Math.max(...vals.map((v) => textW(fmt(v), tfs))) + fs * 0.4 : fs * 0.5);
+    const plotLen = horiz ? hx1 - hx0 : H - top - pad;
+    let ticks;
+    // Réduit le nombre de graduations tant que leurs libellés se chevauchent.
+    for (let count = Math.max(2, Math.min(8, Math.floor(plotLen / (fs * 2.6)))); count >= 1; count--) {
+      ticks = niceTicks(lo0, hi0, count);
+      const space = horiz ? Math.max(...ticks.map((t) => textW(fmt(t), tfs))) + fs : fs * 2.2;
+      if (plotLen / Math.max(1, ticks.length - 1) >= space) break;
+    }
+    const lo = ticks[0], hi = ticks[ticks.length - 1];
     const grid = (x1, y1, x2, y2, zero) => out.push(`<line x1="${r2(x1)}" y1="${r2(y1)}" x2="${r2(x2)}" y2="${r2(y2)}" stroke="${G.esc(col)}" stroke-opacity="${zero ? 0.45 : 0.12}" stroke-width="${zero ? Math.max(1, fs / 14) : Math.max(1, fs / 22)}"/>`);
     const n = data.length;
 
     if (horiz) {
-      const labW = Math.min(W * 0.32, Math.max(...data.map((d) => textW(d.label, fs))) + fs * 0.6);
-      const x0 = pad + labW, x1 = W - pad - (el.showValues ? Math.max(...vals.map((v) => textW(fmt(v), tfs))) + fs * 0.4 : fs * 0.5);
+      const labW = hLabW, x0 = hx0, x1 = hx1;
       const y0 = top, y1 = H - pad - fs * 1.4;
       const X = (v) => x0 + ((v - lo) / (hi - lo)) * (x1 - x0);
       for (const t of ticks) {
@@ -147,7 +156,7 @@
       data.forEach((d, i) => {
         const xc = x0 + band * (i + 0.5), a = Y(0), b = Y(d.value);
         out.push(barPath(xc - bw / 2, Math.min(a, b), bw, Math.abs(a - b), rad, d.value >= 0 ? 'top' : 'bottom', color));
-        if (el.showValues) txt(xc, d.value >= 0 ? b - fs * 0.35 : b + fs * 1.05, fmt(d.value), { fs: tfs, weight: 600, anchor: 'middle' });
+        if (el.showValues && textW(fmt(d.value), tfs) <= band * 1.05) txt(xc, d.value >= 0 ? b - fs * 0.35 : b + fs * 1.05, fmt(d.value), { fs: tfs, weight: 600, anchor: 'middle' });
       });
     } else {
       const pts = data.map((d, i) => [x0 + band * (i + 0.5), Y(d.value)]);
@@ -160,7 +169,7 @@
       out.push(`<path d="${line}" fill="none" stroke="${color}" stroke-width="${r2(sw)}" stroke-linejoin="round" stroke-linecap="round"/>`);
       pts.forEach(([x, y], i) => {
         out.push(`<circle cx="${r2(x)}" cy="${r2(y)}" r="${r2(sw * 1.7)}" fill="#ffffff" stroke="${color}" stroke-width="${r2(sw)}"/>`);
-        if (el.showValues) txt(x, y - sw * 1.7 - fs * 0.35, fmt(data[i].value), { fs: tfs, weight: 600, anchor: 'middle' });
+        if (el.showValues && textW(fmt(data[i].value), tfs) <= band * 1.05) txt(x, y - sw * 1.7 - fs * 0.35, fmt(data[i].value), { fs: tfs, weight: 600, anchor: 'middle' });
       });
     }
   }
